@@ -19,9 +19,9 @@
 <menu:menubar xmlns:menu="http://openoffice.org/2001/menu" menu:id="menubar">
     <menu:menu menu:id=".uno:PickList">
         <menu:menupopup>
-            <menu:menuitem menu:id=".uno:AddDirect"/>
+            <!-- <menu:menuitem menu:id=".uno:AddDirect"/> -->
             <menu:menuitem menu:id=".uno:Open"/>
-            <menu:menuitem menu:id=".uno:OpenRemote"/>
+            <!-- <menu:menuitem menu:id=".uno:OpenRemote"/> -->
             <menu:menuitem menu:id=".uno:RecentFileList"/>
             <menu:menuitem menu:id=".uno:CloseDoc"/>
             <menu:menuseparator/>
@@ -33,8 +33,8 @@
                     <menu:menuitem menu:id=".uno:NewDoc"/>
                 </menu:menupopup>
             </menu:menu>
-            <menu:menuitem menu:id=".uno:AutoPilotMenu"/>
-            <menu:menuseparator/>
+            <!-- <menu:menuitem menu:id=".uno:AutoPilotMenu"/>
+            <menu:menuseparator/> -->
             <menu:menuitem menu:id=".uno:Reload"/>
             <menu:menuitem menu:id=".uno:VersionDialog"/>
             <menu:menuseparator/>

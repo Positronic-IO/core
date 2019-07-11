@@ -19,19 +19,19 @@
 -->
 <toolbar:toolbar xmlns:toolbar="http://openoffice.org/2001/toolbar" xmlns:xlink="http://www.w3.org/1999/xlink">
  <toolbar:toolbaritem xlink:href=".uno:OpenUrl" toolbar:visible="false"/>
- <toolbar:toolbaritem xlink:href=".uno:AddDirect"/>
+ <toolbar:toolbaritem xlink:href=".uno:AddDirect" toolbar:visible="false" />
  <toolbar:toolbaritem xlink:href=".uno:NewDoc" toolbar:visible="false"/>
  <toolbar:toolbaritem xlink:href=".uno:OpenFromCalc"/>
  <toolbar:toolbaritem xlink:href=".uno:OpenRemote" toolbar:visible="false"/>
- <toolbar:toolbaritem xlink:href=".uno:Save"/>
+ <toolbar:toolbaritem xlink:href=".uno:Save" toolbar:visible="false"/>
  <toolbar:toolbaritem xlink:href=".uno:SaveAs" toolbar:visible="false"/>
  <toolbar:toolbaritem xlink:href=".uno:SendMail" toolbar:visible="false"/>
  <toolbar:toolbarseparator/>
  <toolbar:toolbaritem xlink:href=".uno:EditDoc" toolbar:visible="false"/>
  <toolbar:toolbarseparator/>
- <toolbar:toolbaritem xlink:href=".uno:ExportDirectToPDF"/>
+ <toolbar:toolbaritem xlink:href=".uno:ExportDirectToPDF" toolbar:visible="false"/>
  <toolbar:toolbaritem xlink:href=".uno:PrintDefault" toolbar:visible="false"/>
- <toolbar:toolbaritem xlink:href=".uno:Print"/>
+ <toolbar:toolbaritem xlink:href=".uno:Print" toolbar:visible="false"/>
  <toolbar:toolbaritem xlink:href=".uno:PrintPreview"/>
  <toolbar:toolbarseparator/>
  <toolbar:toolbaritem xlink:href=".uno:Cut"/>

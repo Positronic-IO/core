@@ -19,13 +19,13 @@
 <menu:menubar xmlns:menu="http://openoffice.org/2001/menu" menu:id="menubar">
   <menu:menu menu:id=".uno:PickList">
     <menu:menupopup>
-      <menu:menuitem menu:id=".uno:AddDirect"/>
+      <!-- <menu:menuitem menu:id=".uno:AddDirect"/> -->
       <menu:menuitem menu:id=".uno:OpenFromWriter"/>
-      <menu:menuitem menu:id=".uno:OpenRemote"/>
+      <!-- <menu:menuitem menu:id=".uno:OpenRemote"/> -->
       <menu:menuitem menu:id=".uno:RecentFileList"/>
       <menu:menuitem menu:id=".uno:CloseDoc"/>
-      <menu:menuseparator/>
-      <menu:menuitem menu:id=".uno:AutoPilotMenu"/>
+      <!-- <menu:menuseparator/>
+      <menu:menuitem menu:id=".uno:AutoPilotMenu"/> -->
       <menu:menu menu:id=".uno:TemplateMenu">
           <menu:menupopup>
               <menu:menuitem menu:id=".uno:OpenTemplate"/>
