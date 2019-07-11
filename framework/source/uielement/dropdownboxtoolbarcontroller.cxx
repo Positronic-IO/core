@@ -117,6 +117,7 @@ DropdownToolbarController::DropdownToolbarController(
     ComplexToolbarController( rxContext, rFrame, pToolbar, nID, aCommand )
     ,   m_pListBoxControl( nullptr )
 {
+    #ifdef NOTVIEWONLY
     m_pListBoxControl = VclPtr<ListBoxControl>::Create( m_pToolbar, WB_DROPDOWN|WB_AUTOHSCROLL|WB_BORDER, this );
     if ( nWidth == 0 )
         nWidth = 100;
@@ -128,6 +129,7 @@ DropdownToolbarController::DropdownToolbarController(
     m_pListBoxControl->SetSizePixel( ::Size( nWidth, aPixelSize.Height() ));
     m_pToolbar->SetItemWindow( m_nID, m_pListBoxControl );
     m_pListBoxControl->SetDropDownLineCount( 5 );
+    #endif
 }
 
 DropdownToolbarController::~DropdownToolbarController()
@@ -180,6 +182,7 @@ void DropdownToolbarController::LoseFocus()
 
 void DropdownToolbarController::executeControlCommand( const css::frame::ControlCommand& rControlCommand )
 {
+    #ifdef NOTVIEWONLY
     if ( rControlCommand.Command == "SetList" )
     {
         for ( sal_Int32 i = 0; i < rControlCommand.Arguments.getLength(); i++ )
@@ -282,6 +285,7 @@ void DropdownToolbarController::executeControlCommand( const css::frame::Control
             }
         }
     }
+    #endif
 }
 
 } // namespace
