@@ -239,6 +239,7 @@ bool SfxObjectShell::IsEnableSetModified() const
 
 bool SfxObjectShell::IsModified()
 {
+    #ifdef NOTVIEWONLY
     if ( pImpl->m_bIsModified )
         return true;
 
@@ -274,7 +275,7 @@ bool SfxObjectShell::IsModified()
             }
         }
     }
-
+    #endif
     return false;
 }
 
