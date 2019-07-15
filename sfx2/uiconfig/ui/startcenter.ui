@@ -95,7 +95,7 @@
     <property name="pixbuf">framework/res/recent-documents.png</property>
   </object>
   <object class="GtkImage" id="open_all_image2">
-    <property name="visible">True</property>
+    <property name="visible">False</property>
     <property name="can_focus">False</property>
     <property name="pixbuf">framework/res/remote-documents.png</property>
   </object>
@@ -164,7 +164,7 @@
                         <child>
                           <object class="GtkButton" id="open_remote">
                             <property name="label" translatable="yes" context="startcenter|open_remote">Remote File_s</property>
-                            <property name="visible">True</property>
+                            <property name="visible">False</property>
                             <property name="can_focus">True</property>
                             <property name="receives_default">True</property>
                             <property name="margin_left">6</property>
