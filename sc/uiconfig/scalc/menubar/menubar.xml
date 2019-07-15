@@ -38,6 +38,8 @@
             <menu:menuitem menu:id=".uno:Reload"/>
             <menu:menuitem menu:id=".uno:VersionDialog"/>
             <menu:menuseparator/>
+            <menu:menuitem menu:id=".uno:ExportToPDF"/>
+            <menu:menuseparator/>
             <!-- <menu:menuitem menu:id=".uno:Save"/>
             <menu:menuitem menu:id=".uno:SaveAsRemote"/>
             <menu:menuitem menu:id=".uno:SaveAs"/>
