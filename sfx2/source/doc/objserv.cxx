@@ -420,9 +420,9 @@ void SfxObjectShell::ExecFile_Impl(SfxRequest &rReq)
     // this guard is created here to have it destruction at the end of the method
     SfxInstanceCloseGuard_Impl aModelGuard;
 
-    #ifdef NOTVIEWONLY
+    //#ifdef NOTVIEWONLY
     bool bIsPDFExport = false;
-    #endif
+    //#endif
     switch(nId)
     {
         case SID_VERSION:
@@ -532,20 +532,39 @@ void SfxObjectShell::ExecFile_Impl(SfxRequest &rReq)
         }
 
         // - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - -
-        case SID_EXPORTDOCASPDF:
+        case SID_SAVEDOC:
+        #ifdef NOTVIEWONLY
+            break;
+        #endif
         case SID_DIRECTEXPORTDOCASPDF:
         #ifdef NOTVIEWONLY
             bIsPDFExport = true;
             SAL_FALLTHROUGH;
+            break;
         #endif
         case SID_EXPORTDOCASEPUB:
+        #ifdef NOTVIEWONLY
+            break;
+        #endif
         case SID_DIRECTEXPORTDOCASEPUB:
+        #ifdef NOTVIEWONLY
+            break;
+        #endif
         case SID_EXPORTDOC:
+        #ifdef NOTVIEWONLY
+            break;
+        #endif
         case SID_SAVEASDOC:
+        #ifdef NOTVIEWONLY
+            break;
+        #endif
         case SID_SAVEASREMOTE:
-        case SID_SAVEDOC:
+        #ifdef NOTVIEWONLY
+            break;
+        #endif
+        case SID_EXPORTDOCASPDF:
         {
-            #ifdef NOTVIEWONLY
+            // #ifdef NOTVIEWONLY
             // derived class may decide to abort this
             if( !QuerySlotExecutable( nId ) )
             {
@@ -755,7 +774,7 @@ void SfxObjectShell::ExecFile_Impl(SfxRequest &rReq)
             ResetError();
 
             Invalidate();
-            #endif
+            // #endif
             break;
         }
 

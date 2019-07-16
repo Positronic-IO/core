@@ -1306,11 +1306,11 @@ bool SfxStoringHelper::GUIStoreModel( const uno::Reference< frame::XModel >& xMo
                                             bool bPreselectPassword,
                                             SignatureState nDocumentSignatureState )
 {
-    #ifndef NOTVIEWONLY
-    return false;
-    #endif
+    // #ifndef NOTVIEWONLY
+    // return false;
+    // #endif
 
-    #ifdef NOTVIEWONLY
+    // #ifdef NOTVIEWONLY
     ModelData_Impl aModelData( *this, xModel, aArgsSequence );
 
 
@@ -1689,7 +1689,7 @@ bool SfxStoringHelper::GUIStoreModel( const uno::Reference< frame::XModel >& xMo
     }
 
     return bDialogUsed;
-    #endif
+    // #endif
 }
 
 
