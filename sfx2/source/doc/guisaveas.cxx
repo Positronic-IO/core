@@ -29,6 +29,8 @@
 #include <com/sun/star/beans/XPropertySet.hpp>
 #include <com/sun/star/beans/XPropertyContainer.hpp>
 #include <com/sun/star/beans/PropertyAttribute.hpp>
+#include <com/sun/star/beans/Property.hpp>
+#include <com/sun/star/beans/XPropertySetInfo.hpp>
 #include <com/sun/star/document/XExporter.hpp>
 #include <com/sun/star/document/XDocumentPropertiesSupplier.hpp>
 #include <com/sun/star/document/XDocumentProperties.hpp>
@@ -131,8 +133,12 @@ const char aFilterNameString[] = "FilterName";
 const char aFilterOptionsString[] = "FilterOptions";
 const char aFilterDataString[] = "FilterData";
 
-using namespace ::com::sun::star;
 using namespace css::system;
+using namespace com::sun::star;
+
+// using namespace ::com::sun::star::beans;
+// using ::com::sun::star::beans::XPropertySet;
+// using ::com::sun::star::beans::XPropertySetInfo;
 
 namespace {
 
@@ -783,6 +789,11 @@ bool ModelData_Impl::CheckFilterOptionsDialogExistence()
     return false;
 }
 
+// void alert( const OUString& msg )
+// {
+//     std::unique_ptr<weld::MessageDialog> xMessageBox(Application::CreateMessageDialog(nullptr, VclMessageType::Info, VclButtonsType::Ok, msg));
+//     xMessageBox->run();
+// }
 
 bool ModelData_Impl::OutputFileDialog( sal_Int16 nStoreMode,
                                             const ::comphelper::SequenceAsHashMap& aPreselectedFilterPropsHM,
@@ -851,6 +862,7 @@ bool ModelData_Impl::OutputFileDialog( sal_Int16 nStoreMode,
     SfxFilterFlags nDont = getDontFlags( nStoreMode );
     vcl::Window* pWin = SfxStoringHelper::GetModelWindow( m_xModel );
     weld::Window* pFrameWin = pWin ? pWin->GetFrameWeld() : nullptr;
+
     if ( ( nStoreMode & EXPORT_REQUESTED ) && !( nStoreMode & WIDEEXPORT_REQUESTED ) )
     {
         if ( ( nStoreMode & PDFEXPORT_REQUESTED ) && !aPreselectedFilterPropsHM.empty() )
@@ -941,13 +953,16 @@ bool ModelData_Impl::OutputFileDialog( sal_Int16 nStoreMode,
         }
     }
 
+
     const OUString aRecommendedDir {GetRecommendedDir( aSuggestedDir )};
+
     if ( !aRecommendedDir.isEmpty() )
         pFileDlg->SetDisplayFolder( aRecommendedDir );
+
     const OUString aRecommendedName {GetRecommendedName( aSuggestedName, aAdjustToType )};
     if ( !aRecommendedName.isEmpty() )
         pFileDlg->SetFileName( aRecommendedName );
-
+    //pFileDlg->SetFileName( OUString("foo.pdf"));
     uno::Reference < view::XSelectionSupplier > xSel( GetModel()->getCurrentController(), uno::UNO_QUERY );
     if ( xSel.is() && xSel->getSelection().hasValue() )
         GetMediaDescr()[OUString("SelectionOnly")] <<= true;
@@ -1300,6 +1315,12 @@ namespace
     }
 }
 
+void alert( const OUString& msg )
+{
+    std::unique_ptr<weld::MessageDialog> xMessageBox(Application::CreateMessageDialog(nullptr, VclMessageType::Info, VclButtonsType::Ok, msg));
+    xMessageBox->run();
+}
+
 bool SfxStoringHelper::GUIStoreModel( const uno::Reference< frame::XModel >& xModel,
                                             const OUString& aSlotName,
                                             uno::Sequence< beans::PropertyValue >& aArgsSequence,
@@ -1312,8 +1333,6 @@ bool SfxStoringHelper::GUIStoreModel( const uno::Reference< frame::XModel >& xMo
 
     // #ifdef NOTVIEWONLY
     ModelData_Impl aModelData( *this, xModel, aArgsSequence );
-
-
 
     bool bDialogUsed = false;
 
@@ -1468,15 +1487,15 @@ bool SfxStoringHelper::GUIStoreModel( const uno::Reference< frame::XModel >& xMo
     if ( ( nStoreMode & EXPORT_REQUESTED ) && (bPDFOptions || bEPUBOptions) )
     {
         // this is PDF or EPUB export, the filter options dialog should be shown before the export
-        aModelData.GetMediaDescr()[sFilterNameString] <<= aFilterName;
-        if ( aModelData.GetMediaDescr().find( sFilterFlagsString ) == aModelData.GetMediaDescr().end()
-          && aModelData.GetMediaDescr().find( sFilterOptionsString ) == aModelData.GetMediaDescr().end()
-          && aModelData.GetMediaDescr().find( sFilterDataString ) == aModelData.GetMediaDescr().end() )
-        {
-            // execute filter options dialog since no options are set in the media descriptor
-            if ( aModelData.ExecuteFilterDialog_Impl( aFilterName ) )
-                bDialogUsed = true;
-        }
+        // aModelData.GetMediaDescr()[sFilterNameString] <<= aFilterName;
+        // if ( aModelData.GetMediaDescr().find( sFilterFlagsString ) == aModelData.GetMediaDescr().end()
+        //   && aModelData.GetMediaDescr().find( sFilterOptionsString ) == aModelData.GetMediaDescr().end()
+        //   && aModelData.GetMediaDescr().find( sFilterDataString ) == aModelData.GetMediaDescr().end() )
+        // {
+        //     // execute filter options dialog since no options are set in the media descriptor
+        //     if ( aModelData.ExecuteFilterDialog_Impl( aFilterName ) )
+        //         bDialogUsed = true;
+        // }
     }
 
     if ( aFileNameIter == aModelData.GetMediaDescr().end() )
@@ -1675,6 +1694,12 @@ bool SfxStoringHelper::GUIStoreModel( const uno::Reference< frame::XModel >& xMo
     {
         // Document properties can contain streams that should be freed before storing
         aModelData.FreeDocumentProps();
+
+        const OUString aExportPath = OUString::createFromAscii(std::getenv("LIBREOFFICE_EXPORTPATH"));
+        const OUString target = aURL.GetMainURL( INetURLObject::DecodeMechanism::NONE );
+        if(!target.startsWith(aExportPath)) {
+            throw uno::RuntimeException("Access Denied");
+        }
 
         // this is actually a save operation with different parameters
         // so storeTo or storeAs without DocInfo operations are used
