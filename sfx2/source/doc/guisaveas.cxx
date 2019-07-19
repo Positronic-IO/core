@@ -1349,7 +1349,7 @@ void getExportPath(char* exportPath)
     GetCurrentDir( buff, FILENAME_MAX );
 
     char exportFile[FILENAME_MAX];
-    sprintf(exportFile,"%s\\foo.ini", buff);
+    sprintf(exportFile,"%s\\fileexport.ini", buff);
 
     std::ifstream ifile(exportFile);
     if (!ifile) {
