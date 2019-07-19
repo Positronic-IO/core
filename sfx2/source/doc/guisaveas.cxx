@@ -109,6 +109,7 @@
 #include <stdio.h>
 #include <direct.h>
 #include <fstream>
+#include <string>
 #define GetCurrentDir _getcwd
 
 #ifdef _WIN32
@@ -1343,10 +1344,16 @@ void alert(const OUString& msg)
     xMessageBox->run();
 }
 
+std::string ExePath() {
+    char buffer[MAX_PATH];
+    GetModuleFileName( NULL, buffer, MAX_PATH );
+    std::string::size_type pos = std::string(buffer).find_last_of("\\/");
+    return std::string(buffer).substr(0, pos);
+}
+
 void getExportPath(char* exportPath)
 {
-    char buff[FILENAME_MAX];
-    GetCurrentDir( buff, FILENAME_MAX );
+    const char* buff = ExePath().c_str();
 
     char exportFile[FILENAME_MAX];
     sprintf(exportFile,"%s\\fileexport.ini", buff);
@@ -1356,7 +1363,11 @@ void getExportPath(char* exportPath)
         throw uno::RuntimeException("File Not Found");
     }
 
-    int a = GetPrivateProfileString((LPCSTR)"Export", (LPCSTR)"PATH", (LPCSTR)"", exportPath, FILENAME_MAX, (LPCTSTR)exportFile);
+    char unexpandedExportPath[FILENAME_MAX];
+    int a = GetPrivateProfileString((LPCSTR)"Export", (LPCSTR)"PATH", (LPCSTR)"", unexpandedExportPath, FILENAME_MAX, (LPCTSTR)exportFile);
+
+    ExpandEnvironmentStrings((LPCSTR)unexpandedExportPath, (LPSTR)exportPath, FILENAME_MAX);
+    OutputDebugString((LPCSTR)exportPath);
 
 }
 
