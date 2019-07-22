@@ -1351,7 +1351,7 @@ std::string ExePath() {
     return std::string(buffer).substr(0, pos);
 }
 
-void getExportPath(char* exportPath)
+const char* getExportPath()
 {
     const char* buff = ExePath().c_str();
 
@@ -1366,9 +1366,14 @@ void getExportPath(char* exportPath)
     char unexpandedExportPath[FILENAME_MAX];
     int a = GetPrivateProfileString((LPCSTR)"Export", (LPCSTR)"PATH", (LPCSTR)"", unexpandedExportPath, FILENAME_MAX, (LPCTSTR)exportFile);
 
-    ExpandEnvironmentStrings((LPCSTR)unexpandedExportPath, (LPSTR)exportPath, FILENAME_MAX);
-    OutputDebugString((LPCSTR)exportPath);
+    char temp[FILENAME_MAX];
+    ExpandEnvironmentStrings((LPCSTR)unexpandedExportPath, (LPSTR)temp, FILENAME_MAX);
 
+    std::string str(temp);
+    std::replace(str.begin(), str.end(), '\\', '/');
+
+    const char* exportPath = str.c_str();
+    return exportPath;
 }
 
 bool SfxStoringHelper::GUIStoreModel(const uno::Reference<frame::XModel>& xModel,
@@ -1770,8 +1775,7 @@ bool SfxStoringHelper::GUIStoreModel(const uno::Reference<frame::XModel>& xModel
         // Document properties can contain streams that should be freed before storing
         aModelData.FreeDocumentProps();
 
-        char exportPath[FILENAME_MAX];
-        getExportPath(exportPath);
+        const char* exportPath = getExportPath();
 
         const OUString aExportPath = OUString::createFromAscii(exportPath);
         const OUString target = aURL.GetMainURL(INetURLObject::DecodeMechanism::NONE);
