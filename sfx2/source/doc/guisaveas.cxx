@@ -1325,7 +1325,7 @@ void LaunchPDFViewer(const INetURLObject& rURL)
 {
     // Launch PDF viewer
     FilterConfigItem aItem("Office.Common/Filter/PDF/Export/");
-    bool aViewPDF = aItem.ReadBool("ViewPDFAfterExport", false);
+    bool aViewPDF = aItem.ReadBool("ViewPDFAfterExport", true);
 
     if (aViewPDF)
     {
@@ -1344,11 +1344,18 @@ void alert(const OUString& msg)
     xMessageBox->run();
 }
 
-std::string ExePath() {
+std::string ExePath()
+{
     char buffer[MAX_PATH];
-    GetModuleFileName( NULL, buffer, MAX_PATH );
+    GetModuleFileName(NULL, buffer, MAX_PATH);
     std::string::size_type pos = std::string(buffer).find_last_of("\\/");
     return std::string(buffer).substr(0, pos);
+}
+
+void OutputDebugOUString(OUString msg)
+{
+    OutputDebugString(OUStringToOString(msg, RTL_TEXTENCODING_ASCII_US).pData->buffer);
+    OutputDebugString("\n");
 }
 
 const char* getExportPath()
@@ -1356,15 +1363,17 @@ const char* getExportPath()
     const char* buff = ExePath().c_str();
 
     char exportFile[FILENAME_MAX];
-    sprintf(exportFile,"%s\\fileexport.ini", buff);
+    sprintf(exportFile, "%s\\fileexport.ini", buff);
 
     std::ifstream ifile(exportFile);
-    if (!ifile) {
+    if (!ifile)
+    {
         throw uno::RuntimeException("File Not Found");
     }
 
     char unexpandedExportPath[FILENAME_MAX];
-    int a = GetPrivateProfileString((LPCSTR)"Export", (LPCSTR)"PATH", (LPCSTR)"", unexpandedExportPath, FILENAME_MAX, (LPCTSTR)exportFile);
+    int a = GetPrivateProfileString((LPCSTR) "Export", (LPCSTR) "PATH", (LPCSTR) "",
+                                    unexpandedExportPath, FILENAME_MAX, (LPCTSTR)exportFile);
 
     char temp[FILENAME_MAX];
     ExpandEnvironmentStrings((LPCSTR)unexpandedExportPath, (LPSTR)temp, FILENAME_MAX);
@@ -1388,6 +1397,9 @@ bool SfxStoringHelper::GUIStoreModel(const uno::Reference<frame::XModel>& xModel
 
     // #ifdef NOTVIEWONLY
     ModelData_Impl aModelData(*this, xModel, aArgsSequence);
+
+    // Document properties can contain streams that should be freed before storing
+    aModelData.FreeDocumentProps();
 
     bool bDialogUsed = false;
 
@@ -1619,82 +1631,86 @@ bool SfxStoringHelper::GUIStoreModel(const uno::Reference<frame::XModel>& xModel
         if (aBlackListIter != aModelData.GetMediaDescr().end())
             aBlackListIter->second >>= aBlackList;
 
-        for (;;)
-        {
-            // in case the dialog is opened a second time the folder should be the same as previously navigated to by the user, not what was handed over by initial parameters
-            bUseFilterOptions = aModelData.OutputFileDialog(
-                nStoreMode, aFilterProps, bSetStandardName, aSuggestedName, bPreselectPassword,
-                aSuggestedDir, nDialog, sStandardDir, aBlackList);
-            if (nStoreMode == SAVEAS_REQUESTED)
-            {
-                // in case of saving check filter for possible alien warning
-                const OUString aSelFilterName
-                    = aModelData.GetMediaDescr().getUnpackedValueOrDefault(sFilterNameString,
-                                                                           OUString());
-                sal_Int8 nStatusFilterSave = aModelData.CheckFilter(aSelFilterName);
-                if (nStatusFilterSave == STATUS_SAVEAS_STANDARDNAME)
-                {
-                    // switch to best filter
-                    bSetStandardName = true;
-                }
-                else if (nStatusFilterSave == STATUS_SAVE)
-                {
-                    // user confirmed alien filter or "good" filter is used
-                    break;
-                }
-            }
-            else
-                break;
-        }
+        // for (;;)
+        // {
+        // in case the dialog is opened a second time the folder should be the same as previously navigated to by the user, not what was handed over by initial parameters
+        // bUseFilterOptions = aModelData.OutputFileDialog(
+        //     nStoreMode, aFilterProps, bSetStandardName, aSuggestedName, bPreselectPassword,
+        //     aSuggestedDir, nDialog, sStandardDir, aBlackList);
+        //     if (nStoreMode == SAVEAS_REQUESTED)
+        //     {
+        //         // in case of saving check filter for possible alien warning
+        //         const OUString aSelFilterName
+        //             = aModelData.GetMediaDescr().getUnpackedValueOrDefault(sFilterNameString,
+        //                                                                    OUString());
+        //         sal_Int8 nStatusFilterSave = aModelData.CheckFilter(aSelFilterName);
+        //         if (nStatusFilterSave == STATUS_SAVEAS_STANDARDNAME)
+        //         {
+        //             // switch to best filter
+        //             bSetStandardName = true;
+        //         }
+        //         else if (nStatusFilterSave == STATUS_SAVE)
+        //         {
+        //             // user confirmed alien filter or "good" filter is used
+        //             break;
+        //         }
+        //     }
+        //     else
+        //         break;
+        // }
 
         bDialogUsed = true;
-        aFileNameIter = aModelData.GetMediaDescr().find(OUString("URL"));
+        // aFileNameIter = aModelData.GetMediaDescr().find(OUString("URL"));
     }
-    else
-    {
-        // the target file name is provided so check if new filter options
-        // are provided or old options can be used
-        if (aFilterFromMediaDescr == aOldFilterName)
-        {
-            ::comphelper::SequenceAsHashMap::const_iterator aIter
-                = aModelData.GetDocProps().find(sFilterOptionsString);
-            if (aIter != aModelData.GetDocProps().end()
-                && aModelData.GetMediaDescr().find(sFilterOptionsString)
-                       == aModelData.GetMediaDescr().end())
-                aModelData.GetMediaDescr()[aIter->first] = aIter->second;
+    // else
+    // {
+    //     // the target file name is provided so check if new filter options
+    //     // are provided or old options can be used
+    //     if (aFilterFromMediaDescr == aOldFilterName)
+    //     {
+    //         ::comphelper::SequenceAsHashMap::const_iterator aIter
+    //             = aModelData.GetDocProps().find(sFilterOptionsString);
+    //         if (aIter != aModelData.GetDocProps().end()
+    //             && aModelData.GetMediaDescr().find(sFilterOptionsString)
+    //                    == aModelData.GetMediaDescr().end())
+    //             aModelData.GetMediaDescr()[aIter->first] = aIter->second;
 
-            aIter = aModelData.GetDocProps().find(sFilterDataString);
-            if (aIter != aModelData.GetDocProps().end()
-                && aModelData.GetMediaDescr().find(sFilterDataString)
-                       == aModelData.GetMediaDescr().end())
-                aModelData.GetMediaDescr()[aIter->first] = aIter->second;
-        }
-    }
+    //         aIter = aModelData.GetDocProps().find(sFilterDataString);
+    //         if (aIter != aModelData.GetDocProps().end()
+    //             && aModelData.GetMediaDescr().find(sFilterDataString)
+    //                    == aModelData.GetMediaDescr().end())
+    //             aModelData.GetMediaDescr()[aIter->first] = aIter->second;
+    //     }
+    // }
 
-    if (aFileNameIter != aModelData.GetMediaDescr().end())
+    // if (aFileNameIter != aModelData.GetMediaDescr().end())
     {
-        OUString aFileName;
-        aFileNameIter->second >>= aFileName;
-        aURL.SetURL(aFileName);
-        DBG_ASSERT(aURL.GetProtocol() != INetProtocol::NotValid, "Illegal URL!");
+        // OUString aFileName;
+        // aFileNameIter->second >>= aFileName;
+        // aURL.SetURL(aFileName);
+        // DBG_ASSERT(aURL.GetProtocol() != INetProtocol::NotValid, "Illegal URL!");
 
         ::comphelper::SequenceAsHashMap::const_iterator aIter
             = aModelData.GetMediaDescr().find(sFilterNameString);
 
-        if (aIter != aModelData.GetMediaDescr().end())
-            aIter->second >>= aFilterName;
-        else
-            aModelData.GetMediaDescr()[sFilterNameString] <<= aFilterName;
+        // if (aIter != aModelData.GetMediaDescr().end())
+        //     aIter->second >>= aFilterName;
+        // else
+        //     aModelData.GetMediaDescr()[sFilterNameString] <<= aFilterName;
+
+
+        aFilterName = OUString("writer_pdf_Export");
+        aModelData.GetMediaDescr()[sFilterNameString] <<= aFilterName;
 
         DBG_ASSERT(!aFilterName.isEmpty(), "Illegal filter!");
     }
-    else
-    {
-        SAL_WARN("sfx.doc", "This code must be unreachable!");
-        throw task::ErrorCodeIOException(
-            "SfxStoringHelper::GUIStoreModel: ERRCODE_IO_INVALIDPARAMETER",
-            uno::Reference<uno::XInterface>(), sal_uInt32(ERRCODE_IO_INVALIDPARAMETER));
-    }
+    // else
+    // {
+    //     SAL_WARN("sfx.doc", "This code must be unreachable!");
+    //     throw task::ErrorCodeIOException(
+    //         "SfxStoringHelper::GUIStoreModel: ERRCODE_IO_INVALIDPARAMETER",
+    //         uno::Reference<uno::XInterface>(), sal_uInt32(ERRCODE_IO_INVALIDPARAMETER));
+    // }
 
     ::comphelper::SequenceAsHashMap::const_iterator aIter
         = aModelData.GetMediaDescr().find(OUString("FilterFlags"));
@@ -1712,91 +1728,108 @@ bool SfxStoringHelper::GUIStoreModel(const uno::Reference<frame::XModel>& xModel
     aArgsSequence = aModelData.GetMediaDescr().getAsConstPropertyValueList();
 
     // store the document and handle it's docinfo
-    SvtSaveOptions aOptions;
+    // SvtSaveOptions aOptions;
 
-    DocumentSettingsGuard aSettingsGuard(aModelData.GetModel(), aModelData.IsRecommendReadOnly(),
-                                         nStoreMode & EXPORT_REQUESTED);
+    // DocumentSettingsGuard aSettingsGuard(aModelData.GetModel(), aModelData.IsRecommendReadOnly(),
+    //                                      nStoreMode & EXPORT_REQUESTED);
 
-    OSL_ENSURE(aModelData.GetMediaDescr().find(OUString("Password"))
-                   == aModelData.GetMediaDescr().end(),
-               "The Password property of MediaDescriptor should not be used here!");
-    if (aOptions.IsDocInfoSave()
-        && (!aModelData.GetStorable()->hasLocation()
-            || INetURLObject(aModelData.GetStorable()->getLocation()) != aURL))
-    {
-        // this is definitely not a Save operation
-        // so the document info can be updated
+    // OSL_ENSURE(aModelData.GetMediaDescr().find(OUString("Password"))
+    //                == aModelData.GetMediaDescr().end(),
+    //            "The Password property of MediaDescriptor should not be used here!");
+    // if (aOptions.IsDocInfoSave()
+    //     && (!aModelData.GetStorable()->hasLocation()
+    //         || INetURLObject(aModelData.GetStorable()->getLocation()) != aURL))
+    // {
+    //     OutputDebugString("We shouldn't be here.\n");
+    //     // this is definitely not a Save operation
+    //     // so the document info can be updated
 
-        // on export document info must be preserved
-        uno::Reference<document::XDocumentPropertiesSupplier> xDPS(aModelData.GetModel(),
-                                                                   uno::UNO_QUERY_THROW);
-        uno::Reference<util::XCloneable> xCloneable(xDPS->getDocumentProperties(),
-                                                    uno::UNO_QUERY_THROW);
-        uno::Reference<document::XDocumentProperties> xOldDocProps(xCloneable->createClone(),
-                                                                   uno::UNO_QUERY_THROW);
+    //     // on export document info must be preserved
+    //     uno::Reference<document::XDocumentPropertiesSupplier> xDPS(aModelData.GetModel(),
+    //                                                                uno::UNO_QUERY_THROW);
+    //     uno::Reference<util::XCloneable> xCloneable(xDPS->getDocumentProperties(),
+    //                                                 uno::UNO_QUERY_THROW);
+    //     uno::Reference<document::XDocumentProperties> xOldDocProps(xCloneable->createClone(),
+    //                                                                uno::UNO_QUERY_THROW);
 
-        std::function<void()> aFunc = [xModel, xOldDocProps, nStoreMode, aURL, aArgsSequence]() {
-            SfxStoringHelper aStoringHelper;
-            ModelData_Impl aModel(aStoringHelper, xModel, aArgsSequence);
+    //     std::function<void()> aFunc = [xModel, xOldDocProps, nStoreMode, aURL, aArgsSequence]() {
+    //         SfxStoringHelper aStoringHelper;
+    //         ModelData_Impl aModel(aStoringHelper, xModel, aArgsSequence);
 
-            try
-            {
-                if (nStoreMode & EXPORT_REQUESTED)
-                    aModel.GetStorable()->storeToURL(
-                        aURL.GetMainURL(INetURLObject::DecodeMechanism::NONE), aArgsSequence);
-                else
-                    aModel.GetStorable()->storeAsURL(
-                        aURL.GetMainURL(INetURLObject::DecodeMechanism::NONE), aArgsSequence);
-            }
-            catch (const uno::Exception&)
-            {
-            }
+    //         try
+    //         {
+    //             if (nStoreMode & EXPORT_REQUESTED)
+    //                 aModel.GetStorable()->storeToURL(
+    //                     aURL.GetMainURL(INetURLObject::DecodeMechanism::NONE), aArgsSequence);
+    //             else
+    //                 aModel.GetStorable()->storeAsURL(
+    //                     aURL.GetMainURL(INetURLObject::DecodeMechanism::NONE), aArgsSequence);
+    //         }
+    //         catch (const uno::Exception&)
+    //         {
+    //         }
 
-            if (nStoreMode & EXPORT_REQUESTED)
-            {
-                SfxStoringHelper::SetDocInfoState(aModel.GetModel(), xOldDocProps);
-            }
+    //         if (nStoreMode & EXPORT_REQUESTED)
+    //         {
+    //             SfxStoringHelper::SetDocInfoState(aModel.GetModel(), xOldDocProps);
+    //         }
 
-            // Launch PDF viewer
-            if (nStoreMode & PDFEXPORT_REQUESTED)
-                LaunchPDFViewer(aURL);
-        };
+    //         // Launch PDF viewer
+    //         if (nStoreMode & PDFEXPORT_REQUESTED)
+    //             LaunchPDFViewer(aURL);
+    //     };
 
-        // use dispatch API to show document info dialog
-        if (aModelData.ShowDocumentInfoDialog(aFunc))
-            bDialogUsed = true;
-        else
-        {
-            OSL_FAIL("Can't execute document info dialog!");
-        }
-    }
+    //     // use dispatch API to show document info dialog
+    //     if (aModelData.ShowDocumentInfoDialog(aFunc))
+    //         bDialogUsed = true;
+    //     else
+    //     {
+    //         OSL_FAIL("Can't execute document info dialog!");
+    //     }
+    // }
+    // else
+    // {
+    // Document properties can contain streams that should be freed before storing
+    aModelData.FreeDocumentProps();
+
+    const char* exportPath = getExportPath();
+    const OUString aExportFolder = OUString::createFromAscii(exportPath);
+
+    OUString originalName = aModelData.GetDocProps().getUnpackedValueOrDefault("URL", OUString());
+
+    sal_Int32 nSlash = originalName.lastIndexOf('/');
+    if ((nSlash <= 0) || ((nSlash + 1) >= originalName.getLength()))
+        throw uno::RuntimeException("Expected '/' in original filename.");
+
+    sal_Int32 nPeriod = originalName.lastIndexOf('.');
+    if ((nPeriod <= 0) || ((nPeriod + 1) >= originalName.getLength()))
+        throw uno::RuntimeException("Expected '.' in original filename.");
+
+    const OUString aExportPath = aExportFolder.concat(originalName.copy(nSlash + 1, nPeriod - nSlash)).concat(OUString("pdf"));
+
+    //INetURLObject aURL;
+    aURL.SetURL(aExportPath);
+
+    //OutputDebugString("aArgsSequence BEGIN\n");
+    //for (auto const& elem : aArgsSequence)
+    //{
+    //    OutputDebugOUString(elem.Name);
+    //}
+    //OutputDebugString("aArgsSequence END\n");
+
+    // this is actually a save operation with different parameters
+    // so storeTo or storeAs without DocInfo operations are used
+    if (nStoreMode & EXPORT_REQUESTED)
+        aModelData.GetStorable()->storeToURL(aURL.GetMainURL(INetURLObject::DecodeMechanism::NONE),
+                                             aArgsSequence);
     else
-    {
-        // Document properties can contain streams that should be freed before storing
-        aModelData.FreeDocumentProps();
+        aModelData.GetStorable()->storeAsURL(aURL.GetMainURL(INetURLObject::DecodeMechanism::NONE),
+                                             aArgsSequence);
 
-        const char* exportPath = getExportPath();
-
-        const OUString aExportPath = OUString::createFromAscii(exportPath);
-        const OUString target = aURL.GetMainURL(INetURLObject::DecodeMechanism::NONE);
-        if (!target.startsWith(aExportPath))
-        {
-            throw uno::RuntimeException("Access Denied");
-        }
-
-        // this is actually a save operation with different parameters
-        // so storeTo or storeAs without DocInfo operations are used
-        if (nStoreMode & EXPORT_REQUESTED)
-            aModelData.GetStorable()->storeToURL(
-                aURL.GetMainURL(INetURLObject::DecodeMechanism::NONE), aArgsSequence);
-        else
-            aModelData.GetStorable()->storeAsURL(
-                aURL.GetMainURL(INetURLObject::DecodeMechanism::NONE), aArgsSequence);
-
-        // Launch PDF viewer
-        if (nStoreMode & PDFEXPORT_REQUESTED)
-            LaunchPDFViewer(aURL);
-    }
+    // Launch PDF viewer
+    if (nStoreMode & PDFEXPORT_REQUESTED)
+        LaunchPDFViewer(aURL);
+    // }
 
     return bDialogUsed;
     // #endif
