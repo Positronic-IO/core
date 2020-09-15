@@ -696,6 +696,20 @@ void SfxObjectShell::ExecFile_Impl(SfxRequest &rReq)
             }
         }
             [[fallthrough]];
+
+#ifndef NOTVIEWONLY
+        case SID_EXPORTDOCASEPUB:
+        case SID_DIRECTEXPORTDOCASEPUB:
+        case SID_EXPORTDOC:
+        case SID_SAVEASDOC:
+        case SID_SAVEASREMOTE:
+        case SID_SAVEDOC:
+            break;
+
+        case SID_EXPORTDOCASPDF:
+        {
+            bIsPDFExport = true;
+#else
         case SID_EXPORTDOCASPDF:
             bIsPDFExport = true;
             [[fallthrough]];
@@ -706,6 +720,7 @@ void SfxObjectShell::ExecFile_Impl(SfxRequest &rReq)
         case SID_SAVEASREMOTE:
         case SID_SAVEDOC:
         {
+#endif
             // derived class may decide to abort this
             if( !QuerySlotExecutable( nId ) )
             {
@@ -998,6 +1013,7 @@ void SfxObjectShell::ExecFile_Impl(SfxRequest &rReq)
 
         case SID_SAVEACOPY:
         {
+ #ifdef NOTVIEWONLY
             SfxAllItemSet aArgs( GetPool() );
             aArgs.Put( SfxBoolItem( SID_SAVEACOPYITEM, true ) );
             SfxRequest aSaveACopyReq( SID_EXPORTDOC, SfxCallMode::API, aArgs );
@@ -1007,6 +1023,7 @@ void SfxObjectShell::ExecFile_Impl(SfxRequest &rReq)
                 rReq.Ignore();
                 return;
             }
+ #endif
             break;
         }
 
@@ -1126,6 +1143,7 @@ void SfxObjectShell::GetState_Impl(SfxItemSet &rSet)
 
             case SID_CHECKOUT:
                 {
+#ifdef NOTVIEWONLY
                     bool bShow = false;
                     Reference< XCmisDocument > xCmisDoc( GetModel(), uno::UNO_QUERY );
                     const uno::Sequence< document::CmisProperty> aCmisProperties = xCmisDoc->getCmisProperties();
@@ -1156,12 +1174,14 @@ void SfxObjectShell::GetState_Impl(SfxItemSet &rSet)
                         rSet.DisableItem( nWhich );
                         rSet.Put( SfxVisibilityItem( nWhich, false ) );
                     }
+#endif
                 }
                 break;
 
             case SID_CANCELCHECKOUT:
             case SID_CHECKIN:
                 {
+#ifdef NOTVIEWONLY
                     bool bShow = false;
                     Reference< XCmisDocument > xCmisDoc( GetModel(), uno::UNO_QUERY );
                     uno::Sequence< document::CmisProperty> aCmisProperties = xCmisDoc->getCmisProperties( );
@@ -1186,6 +1206,7 @@ void SfxObjectShell::GetState_Impl(SfxItemSet &rSet)
                         rSet.DisableItem( nWhich );
                         rSet.Put( SfxVisibilityItem( nWhich, false ) );
                     }
+#endif
                 }
                 break;
 
@@ -1203,6 +1224,7 @@ void SfxObjectShell::GetState_Impl(SfxItemSet &rSet)
                 }
             case SID_SAVEDOC:
                 {
+#ifdef NOTVIEWONLY
                     SfxViewFrame *pFrame = SfxViewFrame::GetFirst(this);
                     if ( IsReadOnly() || (pFrame && pFrame->GetViewShell()->isSaveLocked()))
                     {
@@ -1210,6 +1232,7 @@ void SfxObjectShell::GetState_Impl(SfxItemSet &rSet)
                         break;
                     }
                     rSet.Put(SfxStringItem(nWhich, SfxResId(STR_SAVEDOC)));
+#endif
                 }
                 break;
 
@@ -1224,6 +1247,7 @@ void SfxObjectShell::GetState_Impl(SfxItemSet &rSet)
 
             case SID_SAVEASDOC:
             {
+#ifdef NOTVIEWONLY
                 SfxViewFrame *pFrame = SfxViewFrame::GetFirst(this);
                 if (!(pImpl->nLoadedFlags & SfxLoadedFlags::MAINDOCUMENT)
                     || (pFrame && pFrame->GetViewShell()->isExportLocked()))
@@ -1235,11 +1259,13 @@ void SfxObjectShell::GetState_Impl(SfxItemSet &rSet)
                     rSet.DisableItem( nWhich );
                 else
                     rSet.Put( SfxStringItem( nWhich, SfxResId(STR_SAVEASDOC) ) );
+#endif
                 break;
             }
 
             case SID_SAVEACOPY:
             {
+#ifdef NOTVIEWONLY
                 SfxViewFrame *pFrame = SfxViewFrame::GetFirst(this);
                 if (!(pImpl->nLoadedFlags & SfxLoadedFlags::MAINDOCUMENT)
                     || (pFrame && pFrame->GetViewShell()->isExportLocked()))
@@ -1251,6 +1277,7 @@ void SfxObjectShell::GetState_Impl(SfxItemSet &rSet)
                     rSet.DisableItem( nWhich );
                 else
                     rSet.Put( SfxStringItem( nWhich, SfxResId(STR_SAVEACOPY) ) );
+#endif
                 break;
             }
 
@@ -1263,9 +1290,11 @@ void SfxObjectShell::GetState_Impl(SfxItemSet &rSet)
             case SID_AUTOREDACTDOC:
             case SID_SAVEASREMOTE:
             {
+#ifdef NOTVIEWONLY
                 SfxViewFrame *pFrame = SfxViewFrame::GetFirst(this);
                 if (pFrame && pFrame->GetViewShell()->isExportLocked())
                     rSet.DisableItem( nWhich );
+#endif
                 break;
             }
 

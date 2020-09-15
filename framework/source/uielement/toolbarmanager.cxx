@@ -1615,7 +1615,7 @@ IMPL_LINK( ToolBarManager, MenuSelect, Menu*, pMenu, bool )
 
         if ( m_bDisposed )
             return true;
-
+#ifdef NOTVIEWONLY
         switch ( pMenu->GetCurItemId() )
         {
             case MENUITEM_TOOLBAR_CUSTOMIZETOOLBAR:
@@ -1765,6 +1765,7 @@ IMPL_LINK( ToolBarManager, MenuSelect, Menu*, pMenu, bool )
                 break;
             }
         }
+#endif
     }
 
     return true;

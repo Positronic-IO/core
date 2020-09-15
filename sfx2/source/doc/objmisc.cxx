@@ -265,6 +265,7 @@ bool SfxObjectShell::IsEnableSetModified() const
 
 bool SfxObjectShell::IsModified() const
 {
+#ifdef NOTVIEWONLY    
     if ( pImpl->m_bIsModified )
         return true;
 
@@ -300,7 +301,7 @@ bool SfxObjectShell::IsModified() const
             }
         }
     }
-
+#endif
     return false;
 }
 
@@ -349,7 +350,12 @@ bool SfxObjectShell::IsReadOnlyUI() const
 */
 
 {
+#ifdef NOTVIEWONLY
     return pImpl->bReadOnlyUI;
+#else
+    return true;
+#endif
+
 }
 
 
@@ -386,11 +392,13 @@ void SfxObjectShell::SetReadOnlyUI( bool bReadOnly )
 */
 
 {
+#ifdef NOTVIEWONLY
     if ( bReadOnly != pImpl->bReadOnlyUI )
     {
         pImpl->bReadOnlyUI = bReadOnly;
         Broadcast( SfxHint(SfxHintId::ModeChanged) );
     }
+#endif
 }
 
 
@@ -415,14 +423,20 @@ void SfxObjectShell::SetReadOnly()
     pMedium->SetOpenMode( SFX_STREAM_READONLY, true );
     pMedium->GetItemSet()->Put( SfxBoolItem( SID_DOC_READONLY, true ) );
 
+#ifdef NOTVIEWONLY
     if ( !bWasROUI )
         Broadcast( SfxHint(SfxHintId::ModeChanged) );
+#endif
 }
 
 
 bool SfxObjectShell::IsReadOnly() const
 {
+#ifdef NOTVIEWONLY
     return pImpl->bReadOnlyUI || pMedium == nullptr;
+#else
+    return true;
+#endif
 }
 
 

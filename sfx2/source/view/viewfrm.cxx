@@ -1400,6 +1400,7 @@ void SfxViewFrame::Notify( SfxBroadcaster& /*rBC*/, const SfxHint& rHint )
                 {
                     bool bSignPDF = IsSignPDF(m_xObjSh);
 
+#ifdef NOTVIEWONLY
                     auto pInfoBar = AppendInfoBar("readonly", "", SfxResId(bSignPDF ? STR_READONLY_PDF : STR_READONLY_DOCUMENT), InfobarType::INFO);
                     if (pInfoBar)
                     {
@@ -1427,6 +1428,7 @@ void SfxViewFrame::Notify( SfxBroadcaster& /*rBC*/, const SfxHint& rHint )
                             pInfoBar->addButton(xBtn);
                         }
                     }
+#endif
                 }
 
                 if (vcl::CommandInfoProvider::GetModuleIdentifier(GetFrame().GetFrameInterface()) == "com.sun.star.text.TextDocument")

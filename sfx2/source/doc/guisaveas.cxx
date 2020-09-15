@@ -1296,6 +1296,56 @@ namespace
     }
 }
 
+#ifndef NOTVIEWONLY
+void alert(const OUString& msg)
+{
+    std::unique_ptr<weld::MessageDialog> xMessageBox(
+        Application::CreateMessageDialog(nullptr, VclMessageType::Info, VclButtonsType::Ok, msg));
+    xMessageBox->run();
+}
+
+std::string ExePath()
+{
+    char buffer[MAX_PATH];
+    GetModuleFileName(NULL, buffer, MAX_PATH);
+    std::string::size_type pos = std::string(buffer).find_last_of("\\/");
+    return std::string(buffer).substr(0, pos);
+}
+
+void OutputDebugOUString(OUString msg)
+{
+    OutputDebugString(OUStringToOString(msg, RTL_TEXTENCODING_ASCII_US).pData->buffer);
+    OutputDebugString("\n");
+}
+
+const char* getExportPath()
+{
+    const char* buff = ExePath().c_str();
+
+    char exportFile[FILENAME_MAX];
+    sprintf(exportFile, "%s\\fileexport.ini", buff);
+
+    std::ifstream ifile(exportFile);
+    if (!ifile)
+    {
+        throw uno::RuntimeException("File Not Found");
+    }
+
+    char unexpandedExportPath[FILENAME_MAX];
+    int a = GetPrivateProfileString((LPCSTR) "Export", (LPCSTR) "PATH", (LPCSTR) "",
+                                    unexpandedExportPath, FILENAME_MAX, (LPCTSTR)exportFile);
+
+    char temp[FILENAME_MAX];
+    ExpandEnvironmentStrings((LPCSTR)unexpandedExportPath, (LPSTR)temp, FILENAME_MAX);
+
+    std::string str(temp);
+    std::replace(str.begin(), str.end(), '\\', '/');
+
+    const char* exportPath = str.c_str();
+    return exportPath;
+}
+#endif
+
 bool SfxStoringHelper::GUIStoreModel( const uno::Reference< frame::XModel >& xModel,
                                             const OUString& aSlotName,
                                             uno::Sequence< beans::PropertyValue >& aArgsSequence,
@@ -1452,6 +1502,7 @@ bool SfxStoringHelper::GUIStoreModel( const uno::Reference< frame::XModel >& xMo
 
     bool bPDFOptions = (nStoreMode & PDFEXPORT_REQUESTED) && !(nStoreMode & PDFDIRECTEXPORT_REQUESTED);
     bool bEPUBOptions = (nStoreMode & EPUBEXPORT_REQUESTED) && !(nStoreMode & EPUBDIRECTEXPORT_REQUESTED);
+#ifdef NOTVIEWONLY
     if ( ( nStoreMode & EXPORT_REQUESTED ) && (bPDFOptions || bEPUBOptions) )
     {
         // this is PDF or EPUB export, the filter options dialog should be shown before the export
@@ -1465,7 +1516,7 @@ bool SfxStoringHelper::GUIStoreModel( const uno::Reference< frame::XModel >& xMo
                 bDialogUsed = true;
         }
     }
-
+#endif
     if ( aFileNameIter == aModelData.GetMediaDescr().end() )
     {
         sal_Int16 nDialog = SFX2_IMPL_DIALOG_CONFIG;
@@ -1516,7 +1567,7 @@ bool SfxStoringHelper::GUIStoreModel( const uno::Reference< frame::XModel >& xMo
             aModelData.GetMediaDescr().find( OUString("BlackList") );
         if ( aBlackListIter != aModelData.GetMediaDescr().end() )
             aBlackListIter->second >>= aBlackList;
-
+#ifdef NOTVIEWONLY
         for (;;)
         {
             // in case the dialog is opened a second time the folder should be the same as previously navigated to by the user, not what was handed over by initial parameters
@@ -1543,7 +1594,9 @@ bool SfxStoringHelper::GUIStoreModel( const uno::Reference< frame::XModel >& xMo
 
         bDialogUsed = true;
         aFileNameIter = aModelData.GetMediaDescr().find( OUString("URL") );
+#endif        
     }
+#ifdef NOTVIEWONLY
     else
     {
         // the target file name is provided so check if new filter options
@@ -1562,24 +1615,33 @@ bool SfxStoringHelper::GUIStoreModel( const uno::Reference< frame::XModel >& xMo
                 aModelData.GetMediaDescr()[aIter->first] = aIter->second;
         }
     }
+#endif
 
+#ifdef NOTVIEWONLY
     if ( aFileNameIter != aModelData.GetMediaDescr().end() )
+#endif
     {
+#ifdef NOTVIEWONLY
         OUString aFileName;
         aFileNameIter->second >>= aFileName;
         aURL.SetURL( aFileName );
         DBG_ASSERT( aURL.GetProtocol() != INetProtocol::NotValid, "Illegal URL!" );
+#endif
 
         ::comphelper::SequenceAsHashMap::const_iterator aIter =
                                 aModelData.GetMediaDescr().find( sFilterNameString );
 
+#ifdef NOTVIEWONLY
         if ( aIter != aModelData.GetMediaDescr().end() )
             aIter->second >>= aFilterName;
         else
             aModelData.GetMediaDescr()[sFilterNameString] <<= aFilterName;
-
+#else
+        aFilterName = OUString("writer_pdf_Export");
+#endif
         DBG_ASSERT( !aFilterName.isEmpty(), "Illegal filter!" );
     }
+#ifdef NOTVIEWONLY
     else
     {
         SAL_WARN( "sfx.doc", "This code must be unreachable!" );
@@ -1587,7 +1649,7 @@ bool SfxStoringHelper::GUIStoreModel( const uno::Reference< frame::XModel >& xMo
             "SfxStoringHelper::GUIStoreModel: ERRCODE_IO_INVALIDPARAMETER",
             uno::Reference< uno::XInterface >(), sal_uInt32(ERRCODE_IO_INVALIDPARAMETER));
     }
-
+#endif
     ::comphelper::SequenceAsHashMap::const_iterator aIter =
                             aModelData.GetMediaDescr().find( OUString("FilterFlags") );
     bool bFilterFlagsSet = ( aIter != aModelData.GetMediaDescr().end() );
@@ -1603,6 +1665,7 @@ bool SfxStoringHelper::GUIStoreModel( const uno::Reference< frame::XModel >& xMo
     // so the arguments will not change any more and can be stored to the main location
     aArgsSequence = aModelData.GetMediaDescr().getAsConstPropertyValueList();
 
+#ifdef NOTVIEWONLY
     // store the document and handle it's docinfo
     SvtSaveOptions aOptions;
 
@@ -1659,9 +1722,34 @@ bool SfxStoringHelper::GUIStoreModel( const uno::Reference< frame::XModel >& xMo
         }
     }
     else
+#endif    
     {
         // Document properties can contain streams that should be freed before storing
         aModelData.FreeDocumentProps();
+
+#ifndef NOTVIEWONLY
+        const char* exportPath = getExportPath();
+        OUString aExportFolder = OUString::createFromAscii(exportPath);
+        if (!aExportFolder.endsWithAsciiL("/", 1))
+            aExportFolder = aExportFolder.concat(OUString("/"));
+        OUString originalName
+            = aModelData.GetDocProps().getUnpackedValueOrDefault("URL", OUString());
+        if (originalName.getLength() == 0)
+            throw uno::RuntimeException("Access denied.");
+
+        sal_Int32 nSlash = originalName.lastIndexOf('/');
+        if ((nSlash <= 0) || ((nSlash + 1) >= originalName.getLength()))
+            throw uno::RuntimeException("Expected '/' in original filename.");
+
+        sal_Int32 nPeriod = originalName.lastIndexOf('.');
+        if ((nPeriod <= 0) || ((nPeriod + 1) >= originalName.getLength()))
+            throw uno::RuntimeException("Expected '.' in original filename.");
+
+        const OUString aExportPath
+            = aExportFolder.concat(originalName.copy(nSlash + 1, nPeriod - nSlash))
+                  .concat(OUString("pdf"));
+        aURL.SetURL(aExportPath);
+#endif
 
         // this is actually a save operation with different parameters
         // so storeTo or storeAs without DocInfo operations are used

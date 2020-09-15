@@ -204,6 +204,7 @@ void ToolbarLayoutManager::implts_setDockingAreaWindowSizes( const awt::Rectangl
 
 void ToolbarLayoutManager::doLayout(const ::Size& aContainerSize)
 {
+#ifdef NOTVIEWONLY
     SolarMutexResettableGuard aWriteLock;
     bool bLayoutInProgress( m_bLayoutInProgress );
     m_bLayoutInProgress = true;
@@ -237,6 +238,7 @@ void ToolbarLayoutManager::doLayout(const ::Size& aContainerSize)
     m_bLayoutDirty      = false;
     m_bLayoutInProgress = false;
     aWriteLock.clear();
+#endif
 }
 
 bool ToolbarLayoutManager::implts_isParentWindowVisible() const
@@ -323,6 +325,7 @@ tools::Rectangle ToolbarLayoutManager::implts_calcDockingArea()
         }
     }
 
+#ifdef NOTVIEWONLY
     // Sum up max heights from every row/column
     if ( !aWindowVector.empty() )
     {
@@ -343,7 +346,7 @@ tools::Rectangle ToolbarLayoutManager::implts_calcDockingArea()
                 aBorderSpace.SetRight( nSize );
         }
     }
-
+#endif
     return aBorderSpace;
 }
 
@@ -397,11 +400,13 @@ bool ToolbarLayoutManager::isPreviewFrame()
 
 void ToolbarLayoutManager::createStaticToolbars()
 {
+#ifdef NOTVIEWONLY
     resetDockingArea();
     implts_createCustomToolBars();
     implts_createAddonsToolBars();
     implts_createNonContextSensitiveToolBars();
     implts_sortUIElements();
+#endif
 }
 
 bool ToolbarLayoutManager::requestToolbar( const OUString& rResourceURL )
@@ -437,6 +442,10 @@ bool ToolbarLayoutManager::requestToolbar( const OUString& rResourceURL )
 
 bool ToolbarLayoutManager::createToolbar( const OUString& rResourceURL )
 {
+#ifndef NOTVIEWONLY
+    return false;
+#else
+
     bool bNotify( false );
 
     uno::Reference<frame::XFrame> xFrame;
@@ -564,6 +573,7 @@ bool ToolbarLayoutManager::createToolbar( const OUString& rResourceURL )
     }
 
     return bNotify;
+#endif
 }
 
 bool ToolbarLayoutManager::destroyToolbar( const OUString& rResourceURL )
@@ -1071,6 +1081,7 @@ OUString ToolbarLayoutManager::implts_generateGenericAddonToolbarTitle( sal_Int3
 
 void ToolbarLayoutManager::implts_createAddonsToolBars()
 {
+#ifdef NOTVIEWONLY
     SolarMutexClearableGuard aWriteLock;
     if ( !m_pAddonOptions )
         m_pAddonOptions.reset( new AddonsOptions );
@@ -1179,10 +1190,12 @@ void ToolbarLayoutManager::implts_createAddonsToolBars()
         {
         }
     }
+#endif
 }
 
 void ToolbarLayoutManager::implts_createCustomToolBars()
 {
+#ifdef NOTVIEWONLY
     SolarMutexClearableGuard aReadLock;
     if ( !m_bComponentAttached )
         return;
@@ -1209,6 +1222,7 @@ void ToolbarLayoutManager::implts_createCustomToolBars()
             implts_createCustomToolBars( aTbxSeq ); // second create module based toolbars
         }
     }
+#endif
 }
 
 void ToolbarLayoutManager::implts_createNonContextSensitiveToolBars()
@@ -1305,6 +1319,7 @@ void ToolbarLayoutManager::implts_createCustomToolBars( const uno::Sequence< uno
 
 void ToolbarLayoutManager::implts_createCustomToolBar( const OUString& aTbxResName, const OUString& aTitle )
 {
+#ifdef NOTVIEWONLY
     if ( !aTbxResName.isEmpty() )
     {
         if ( !createToolbar( aTbxResName ) )
@@ -1321,6 +1336,7 @@ void ToolbarLayoutManager::implts_createCustomToolBar( const OUString& aTbxResNa
                 pWindow->SetText( aTitle );
         }
     }
+#endif
 }
 
 void ToolbarLayoutManager::implts_reparentToolbars()

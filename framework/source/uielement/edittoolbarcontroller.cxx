@@ -191,6 +191,7 @@ bool EditToolbarController::PreNotify( NotifyEvent const & rNEvt )
 
 void EditToolbarController::executeControlCommand( const css::frame::ControlCommand& rControlCommand )
 {
+#ifdef NOTVIEWONLY
     if ( rControlCommand.Command.startsWith( "SetText" ))
     {
         for ( sal_Int32 i = 0; i < rControlCommand.Arguments.getLength(); i++ )
@@ -207,6 +208,7 @@ void EditToolbarController::executeControlCommand( const css::frame::ControlComm
             }
         }
     }
+#endif
 }
 
 } // namespace
