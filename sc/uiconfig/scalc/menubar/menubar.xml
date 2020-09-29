@@ -46,11 +46,11 @@
       <menu:menuseparator/>
       <menu:menuitem menu:id=".uno:CheckOut" menu:style="text"/>
       <menu:menuitem menu:id=".uno:CancelCheckOut" menu:style="text"/>
-      <menu:menuitem menu:id=".uno:CheckIn" menu:style="text"/>
+      <menu:menuitem menu:id=".uno:CheckIn" menu:style="text"/> -->
       <menu:menuseparator/>
-      <menu:menuitem menu:id=".uno:ExportTo"/>
+      <!-- <menu:menuitem menu:id=".uno:ExportTo"/> -->
       <menu:menuitem menu:id=".uno:ExportToPDF"/>
-      <menu:menu menu:id=".uno:SendTo">
+      <!-- <menu:menu menu:id=".uno:SendTo">
         <menu:menupopup>
           <menu:menuitem menu:id=".uno:SendMail" menu:style="text"/>
           <menu:menuitem menu:id=".uno:SendMailDocAsOOo" menu:style="text"/>
